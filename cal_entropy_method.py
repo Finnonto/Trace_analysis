@@ -1,10 +1,12 @@
 import math
 import random
 import decimal as dec
+import numpy as np
 
 class CalEntropyMethods():
-    def __init__(self, k_value):
+    def __init__(self, k_value,nf='orign'):
         self.k_value = k_value
+        self.normal_factor = nf
         self.method_dic = dict(
             est_square16384_affine40_remainder_origin=self.calEntropy_estTable_square16384_affine40_remainder_origin,
             est_square16384_affine40_mersenne_stageTableEnd=self.calEntropy_estTable_square16384_affine40_mersenne_stageTableEnd,
@@ -220,54 +222,61 @@ class CalEntropyMethods():
         return result_entropy
 
     def calEntropy_pingli(self, container):
-        #dec.getcontext().prec = 10000
-        # method parameter
-        alpha = 0.9999
+        
+        alpha = 0.99999
         delta = 1 - alpha
 
-        
         # get entropy of each table
         ## parameter
-        x_register = [dec.Decimal(0),] * self.k_value
-        entropy = 0
-        total_item_cnt = 0
+        x_register = [dec.Decimal("0"),] * self.k_value
+        entropy        = dec.Decimal('0')
+        total_item_cnt = dec.Decimal('0')
 
         ## read results and calculate
         for item, cnt in container.most_common():
             ### total cnt
             total_item_cnt += cnt
-
             ### set seed
             random.seed(item)
 
             for i in range(self.k_value):
                 v = random.uniform(0, math.pi)
-                w = -math.log( random.uniform(0, 1) ) # here log is ln
+                w = random.expovariate(1) 
                 
-                r_1 = math.sin(alpha * v)
-                r_2 = pow( math.sin(v), (1/alpha) )
-                r_3_1 = math.sin(v * delta)
-                r_3 = pow( (r_3_1/w), (delta/alpha) )
-                r = (r_1/r_2) * (r_3)
+                r_1    = math.sin(alpha * v)
+                r_2_1  = math.sin(v)
+                r_2    = pow(r_2_1,(1/alpha))
+                r_3_1  = math.sin(v * delta)
+                r_3    = pow((r_3_1/w),(delta/alpha) )
+                r      = (r_1/r_2) * (r_3)
+                r_d = dec.Decimal(r)
 
-                x_register[i] += dec.Decimal(r * cnt)
+                x_register[i] += r_d*cnt
         
+
+        alpha_e = dec.Decimal(alpha)
+        delta = dec.Decimal(str(1 - alpha_e))
         ## cal j_value
-        j_1 = dec.Decimal(delta / self.k_value)
-        j_2 = dec.Decimal(0)
-        alt_pow = dec.Decimal(-alpha/delta)
-        for i in range(self.k_value): j_2 += x_register[i]**alt_pow
+        j_1 = dec.Decimal(str(delta / self.k_value))
+        j_2 = dec.Decimal('0')
+        alt_pow = -alpha_e/delta
+        for i in range(self.k_value): 
+            j_2 += x_register[i]**alt_pow
         j_value = j_1 * j_2
-
+        
         ## est entropy
-        h_1 = -j_value.log10()
-        h_2_1 = dec.Decimal(1/delta)
-        h_2_2_1 = dec.Decimal(total_item_cnt) ** dec.Decimal(alpha)
-        h_2_2 = h_2_2_1.log10()
-        h_2 = h_2_1 * h_2_2
-        entropy = h_1 - h_2
-
-        return float(entropy / h_2_2)
+        h_1 = -j_value.ln()
+        h_2_1 = dec.Decimal(str(1/delta))
+        h_2_2 = total_item_cnt**alpha_e
+        h_2_3 = h_2_2.ln()
+        h_2 = h_2_1 * h_2_3
+        entropy = (h_1 - h_2)
+        
+        # normalized
+        if  self.normal_factor == 'orign' : return float(entropy)
+        elif self.normal_factor == 'total' : return float(entropy / total_item_cnt.ln())
+        elif self.normal_factor == 'distinct' : return float(entropy / dec.Decimal(len(container)).ln())
+        
 
     def calEntropy_estTable_square16384_affine40_mersenne_stageTableAve_round(self, container):
         # parameter

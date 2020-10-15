@@ -12,7 +12,7 @@ from collections import Counter
 import cal_entropy_method as cemd
 
 class PacketAnalysis():
-    def __init__(self, byteorder='big'):
+    def __init__(self, byteorder='big',normal_factor='orign'):
         # time parameter
         self.first_time = None
         self.current_interval = None
@@ -55,25 +55,30 @@ class PacketAnalysis():
         # data type
         self.byteorder = byteorder
         
+        #normalize way
+        self.normal_factor = normal_factor
+
     def __cal_entropy_exact(self, container):
-        total_items_cnt = 0
+        total_item_cnt = 0
         entropy = 0
+        distinct = 0
         for item, cnt in container.most_common():
             entropy += ( cnt * math.log(cnt) )
-            total_items_cnt += cnt
+            total_item_cnt += cnt
+            distinct += 1
         
         # whether container is empty, to avoid trace chasm
-        if total_items_cnt == 0 or total_items_cnt == 1: return None
+        if total_item_cnt == 0 or total_item_cnt == 1: return None
 
         # calculate entropy
-        entropy -= ( total_items_cnt * math.log(total_items_cnt) )
-        entropy = -entropy / total_items_cnt
+        entropy -= ( total_item_cnt * math.log(total_item_cnt) )
+        entropy = -entropy / total_item_cnt
 
         # normalized
-        entropy /= math.log(total_items_cnt)
-
-        return entropy
-    
+        if  self.normal_factor == 'orign' : return  entropy
+        elif self.normal_factor == 'total' : return (entropy /math.log(total_item_cnt))
+        elif self.normal_factor == 'distinct' : return (entropy /math.log(distinct))
+       
     def __cal_entropy_est_table(self, container):
         # parameter
         all_entropy = []
@@ -144,11 +149,11 @@ class PacketAnalysis():
         k_register = [0,] * self.k_value
         total_item_cnt = 0
         entropy = 0
-
+        distinct = 0
         for item, cnt in container.most_common():
             # total cnt
             total_item_cnt += cnt
-
+            distinct += 1
             # give item as seed
             random.seed(item)
 
@@ -184,8 +189,11 @@ class PacketAnalysis():
                 entropy += math.exp(k_register[i])
             entropy /= self.k_value
             entropy = -math.log(entropy)
-            entropy /= math.log(total_item_cnt)
-            return entropy
+            #normalization
+            # normalized
+            if  self.normal_factor == 'orign' :  return entropy
+            elif self.normal_factor == 'total' : return (entropy / math.log(total_item_cnt))
+            elif self.normal_factor == 'distinct' : return (entropy / math.log(distinct))
 
     def __cal_entropy_est_table_square(self, container):
         # parameter
@@ -441,7 +449,7 @@ class PacketAnalysis():
         elif entropy_cal_method == 'est_tables': entropy_cal_function = self.__cal_entropy_est_table
         elif entropy_cal_method == 'est_tables_square': entropy_cal_function = self.__cal_entropy_est_table_square
         else: 
-            other_mathods = cemd.CalEntropyMethods(self.k_value)
+            other_mathods = cemd.CalEntropyMethods(self.k_value,self.normal_factor)
             entropy_cal_function = other_mathods.do(entropy_cal_method)
 
         # time parameter
@@ -629,8 +637,8 @@ class PacketAnalysis():
         self.table = []
 
 class TracePlot(PacketAnalysis):
-    def __init__(self, time_interval, mode='sec'):
-        super(TracePlot, self).__init__()
+    def __init__(self, time_interval, mode='sec',nf='None'):
+        super(TracePlot, self).__init__(normal_factor=nf)
 
         # pcap parameter
         self.time_interval = time_interval
@@ -950,6 +958,7 @@ if __name__ == '__main__':
         attack_list = sys.argv[2]
         mode = sys.argv[3]
         time_interval = int(sys.argv[4])
+        normalization = sys.argv[5]
     except IndexError:
         if len(sys.argv) == 4:
             if mode == 'trans': pass
@@ -986,7 +995,7 @@ if __name__ == '__main__':
         exit(0)
 
     # analysis and plot
-    myplot = TracePlot(time_interval, mode)
+    myplot = TracePlot(time_interval, mode,nf=normalization)
     myplot.one_analysis(input_pcap)
     if attack_list != 'none': myplot.import_attack_list(attack_list)
     myplot.entropy_one_plot(['entropy_src_ip', 'entropy_dst_ip', 'entropy_sport', 'entropy_dport', 
